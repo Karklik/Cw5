@@ -11,5 +11,8 @@ namespace Cw5.DAL
         public int UpdateStudent(string indexNumber, Student student);
         public int DeleteStudent(string indexNumber);
         public Enrollment GetStudentEnrollment(string indexNumber);
+        public Studies GetStudies(string studiesName);
+        public Enrollment CreateStudentEnrollment(EnrollStudentRequest studentEnrollment);
+        public Enrollment GetEnrollment(int indexNumber);
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Cw5.Models;
 using Microsoft.VisualBasic.CompilerServices;
+using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 
@@ -8,9 +9,11 @@ namespace Cw5.DAL
     public class RealDbService : IDbService
     {
         private readonly string connectionString = "Data Source=db-mssql;Initial Catalog=s16556;Integrated Security=True";
+        private SqlConnection SqlConnection => new SqlConnection(connectionString);
+
         public int CreateStudent(Student student)
         {
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand
             {
                 Connection = connection,
@@ -26,9 +29,131 @@ namespace Cw5.DAL
             return command.ExecuteNonQuery();
         }
 
+        public Enrollment CreateStudentEnrollment(EnrollStudentRequest request)
+        {
+            using var connection = SqlConnection;
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            using var command = new SqlCommand
+            {
+                Connection = connection,
+                Transaction = transaction
+            };
+            try
+            {
+                // Checking if studies exists
+                command.CommandText = "SELECT * FROM Studies WHERE Name = @name";
+                command.Parameters.AddWithValue("name", request.Studies);
+                using var studiesDataReader = command.ExecuteReader();
+                if (!studiesDataReader.Read())
+                {
+                    studiesDataReader.Close();
+                    transaction.Rollback();
+                    throw new ArgumentException("Studies dosen't exists");
+                }
+                var studies = new Studies
+                {
+                    IdStudy = IntegerType.FromObject(studiesDataReader["IdStudy"]),
+                    Name = studiesDataReader["Name"].ToString()
+                };
+                studiesDataReader.Close();
+
+                // Checking if enrollment exisits
+                command.CommandText = "SELECT * " +
+                                    "FROM Enrollment " +
+                                    "WHERE IdStudy = @idStudy AND Semester = 1";
+                command.Parameters.AddWithValue("idStudy", studies.IdStudy);
+                using var entrollmentDataReader = command.ExecuteReader();
+                Enrollment enrollment;
+                static Enrollment enrollmentMapper(SqlDataReader reader)
+                {
+                    var enrollment = new Enrollment
+                    {
+                        IdEnrollment = IntegerType.FromObject(reader["IdEnrollment"]),
+                        Semester = IntegerType.FromObject(reader["Semester"]),
+                        StartDate = reader["StartDate"].ToString(),
+                        IdStudy = IntegerType.FromObject(reader["IdStudy"])
+                    };
+                    reader.Close();
+                    return enrollment;
+                }
+                // If enrollment dosen't exist create new one
+                if (!entrollmentDataReader.Read())
+                {
+                    entrollmentDataReader.Close();
+                    // Get IdEnrollment as max +1 since DB don't have auto increment on PK
+                    command.CommandText = "select max(IdEnrollment) + 1 from Enrollment";
+                    var IdEnrollment = 0;
+                    using var idEntrollmentDataReader = command.ExecuteReader();
+                    if (idEntrollmentDataReader.Read())
+                        IdEnrollment = IntegerType.FromObject(idEntrollmentDataReader[0]);
+                    idEntrollmentDataReader.Close();
+
+                    // Prepare Enrollment object for insert
+                    enrollment = new Enrollment
+                    {
+                        IdEnrollment = IdEnrollment,
+                        Semester = 1,
+                        IdStudy = studies.IdStudy,
+                        StartDate = DateTime.Now.ToString("yyyy-MM-dd")
+                    };
+                    command.CommandText = "INSERT INTO Enrollment (IdEnrollment, Semester, IdStudy, StartDate) " +
+                                        "VALUES(@idEnrollment, @semester, @idStudy, @startDate)";
+                    command.Parameters.AddWithValue("idEnrollment", enrollment.IdEnrollment);
+                    command.Parameters.AddWithValue("semester", enrollment.Semester);
+                    command.Parameters.AddWithValue("startDate", enrollment.StartDate);
+                    command.ExecuteNonQuery();
+                    command.CommandText = "SELECT * " +
+                                        "FROM Enrollment " +
+                                        "WHERE IdStudy = @idStudy AND Semester = 1";
+                    using var entrollmentDataReader2 = command.ExecuteReader();
+                    entrollmentDataReader2.Read();
+                    enrollment = enrollmentMapper(entrollmentDataReader2);
+                }
+                else
+                {
+                    enrollment = enrollmentMapper(entrollmentDataReader);
+                    command.Parameters.AddWithValue("idEnrollment", enrollment.IdEnrollment);
+                }
+
+                // Chceking if index number is unique
+                command.CommandText = "SELECT * FROM Student WHERE IndexNumber = @indexNumber";
+                command.Parameters.AddWithValue("indexNumber", request.IndexNumber);
+                using var studentDataReader = command.ExecuteReader();
+                if (studentDataReader.Read())
+                {
+                    studentDataReader.Close();
+                    transaction.Rollback();
+                    throw new ArgumentException("Student with specific IndexNumber already exists");
+                }
+                studentDataReader.Close();
+
+                // Create new student
+                command.CommandText = "INSERT INTO Student " +
+                    "VALUES(@indexNumber, @firstName, @lastName, @birthDate, @idEnrollment)";
+                command.Parameters.AddWithValue("firstName", request.FirstName);
+                command.Parameters.AddWithValue("lastName", request.LastName);
+                command.Parameters.AddWithValue("birthDate", DateTime.ParseExact(request.BirthDate, "dd.MM.yyyy", null)
+                    .ToString("yyyy-MM-dd"));
+
+                if (command.ExecuteNonQuery() == 0)
+                {
+                    transaction.Rollback();
+                    return null;
+                }
+                transaction.Commit();
+                return enrollment;
+            }
+            catch (NotFiniteNumberException)
+            {
+                transaction.Rollback();
+            }
+            return null;
+        }
+
         public int DeleteStudent(string indexNumber)
         {
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand
             {
                 Connection = connection,
@@ -39,9 +164,34 @@ namespace Cw5.DAL
             return command.ExecuteNonQuery();
         }
 
+        public Enrollment GetEnrollment(int idEnrollment)
+        {
+            using var connection = SqlConnection;
+            using var command = new SqlCommand
+            {
+                Connection = connection,
+                CommandText = "SELECT * FROM Enrollment WHERE IdEnrollment = @idEnrollment"
+            };
+            command.Parameters.AddWithValue("idEnrollment", idEnrollment);
+            connection.Open();
+            using var dataReader = command.ExecuteReader();
+            if (dataReader.Read())
+            {
+                var enrollment = new Enrollment
+                {
+                    IdEnrollment = IntegerType.FromObject(dataReader["IdEnrollment"]),
+                    Semester = IntegerType.FromObject(dataReader["Semester"]),
+                    StartDate = dataReader["StartDate"].ToString(),
+                    IdStudy = IntegerType.FromObject(dataReader["IdStudy"])
+                };
+                return enrollment;
+            }
+            return null;
+        }
+
         public Student GetStudent(string indexNumber)
         {
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand
             {
                 Connection = connection,
@@ -49,7 +199,7 @@ namespace Cw5.DAL
             };
             command.Parameters.AddWithValue("indexNumber", indexNumber);
             connection.Open();
-            var dataReader = command.ExecuteReader();
+            using var dataReader = command.ExecuteReader();
             if (dataReader.Read())
             {
                 var student = new Student
@@ -67,7 +217,7 @@ namespace Cw5.DAL
 
         public Enrollment GetStudentEnrollment(string indexNumber)
         {
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand
             {
                 Connection = connection,
@@ -79,13 +229,13 @@ namespace Cw5.DAL
             };
             command.Parameters.AddWithValue("indexNumber", indexNumber);
             connection.Open();
-            var dataReader = command.ExecuteReader();
+            using var dataReader = command.ExecuteReader();
             if (dataReader.Read())
             {
                 var enrollment = new Enrollment
                 {
                     IdEnrollment = IntegerType.FromObject(dataReader["IdEnrollment"]),
-                    Semester = dataReader["Semester"].ToString(),
+                    Semester = IntegerType.FromObject(dataReader["Semester"]),
                     StartDate = dataReader["StartDate"].ToString(),
                     Name = dataReader["Name"].ToString(),
                 };
@@ -99,14 +249,14 @@ namespace Cw5.DAL
             if (orderBy == null)
                 orderBy = "IndexNumber";
             List<Student> students = new List<Student>();
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand()
             {
                 Connection = connection,
                 CommandText = $"SELECT * FROM Student ORDER BY {orderBy}"
             };
             connection.Open();
-            var dataReader = command.ExecuteReader();
+            using var dataReader = command.ExecuteReader();
             while (dataReader.Read())
             {
                 var student = new Student
@@ -122,9 +272,32 @@ namespace Cw5.DAL
             return students;
         }
 
+        public Studies GetStudies(string studiesName)
+        {
+            using var connection = SqlConnection;
+            using var command = new SqlCommand
+            {
+                Connection = connection,
+                CommandText = "SELECT * FROM Studies WHERE Name = @studiesName"
+            };
+            command.Parameters.AddWithValue("studiesName", studiesName);
+            connection.Open();
+            using var dataReader = command.ExecuteReader();
+            if (dataReader.Read())
+            {
+                Studies studies = new Studies
+                {
+                    IdStudy = IntegerType.FromObject(dataReader["IdStudy"]),
+                    Name = dataReader["Name"].ToString()
+                };
+                return studies;
+            }
+            return null;
+        }
+
         public int UpdateStudent(string indexNumber, Student student)
         {
-            using var connection = new SqlConnection(connectionString);
+            using var connection = SqlConnection;
             using var command = new SqlCommand
             {
                 Connection = connection,
