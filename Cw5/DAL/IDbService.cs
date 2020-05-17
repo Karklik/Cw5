@@ -13,6 +13,8 @@ namespace Cw5.DAL
         public Enrollment GetStudentEnrollment(string indexNumber);
         public Studies GetStudies(string studiesName);
         public Enrollment CreateStudentEnrollment(EnrollStudentRequest studentEnrollment);
-        public Enrollment GetEnrollment(int indexNumber);
+        public Enrollment GetEnrollment(int idEnrollment);
+        public Enrollment GetEnrollment(int idStudy, int semester);
+        public Enrollment SemesterPromote(int idStudy, int semester);
     }
 }

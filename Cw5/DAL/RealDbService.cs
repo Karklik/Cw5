@@ -2,6 +2,7 @@
 using Microsoft.VisualBasic.CompilerServices;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 
 namespace Cw5.DAL
@@ -189,6 +190,32 @@ namespace Cw5.DAL
             return null;
         }
 
+        public Enrollment GetEnrollment(int idStudy, int semester)
+        {
+            using var connection = SqlConnection;
+            using var command = new SqlCommand
+            {
+                Connection = connection,
+                CommandText = "SELECT * FROM Enrollment WHERE IdStudy = @idStudy AND Semester = @semester"
+            };
+            command.Parameters.AddWithValue("idStudy", idStudy);
+            command.Parameters.AddWithValue("semester", semester);
+            connection.Open();
+            using var dataReader = command.ExecuteReader();
+            if (dataReader.Read())
+            {
+                var enrollment = new Enrollment
+                {
+                    IdEnrollment = IntegerType.FromObject(dataReader["IdEnrollment"]),
+                    Semester = IntegerType.FromObject(dataReader["Semester"]),
+                    StartDate = dataReader["StartDate"].ToString(),
+                    IdStudy = IntegerType.FromObject(dataReader["IdStudy"])
+                };
+                return enrollment;
+            }
+            return null;
+        }
+
         public Student GetStudent(string indexNumber)
         {
             using var connection = SqlConnection;
@@ -291,6 +318,33 @@ namespace Cw5.DAL
                     Name = dataReader["Name"].ToString()
                 };
                 return studies;
+            }
+            return null;
+        }
+
+        public Enrollment SemesterPromote(int idStudy, int semester)
+        {
+            using var connection = SqlConnection;
+            using var command = new SqlCommand
+            {
+                Connection = connection,
+                CommandText = "sp_SemesterPromote",
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.AddWithValue("id_study", idStudy);
+            command.Parameters.AddWithValue("semester", semester);
+            connection.Open();
+            using var dataReader = command.ExecuteReader();
+            if (dataReader.Read())
+            {
+                var enrollment = new Enrollment
+                {
+                    IdEnrollment = IntegerType.FromObject(dataReader["IdEnrollment"]),
+                    Semester = IntegerType.FromObject(dataReader["Semester"]),
+                    StartDate = dataReader["StartDate"].ToString(),
+                    IdStudy = IntegerType.FromObject(dataReader["IdStudy"])
+                };
+                return enrollment;
             }
             return null;
         }
