@@ -2,7 +2,7 @@
 
 namespace Cw5.DTOs.Requests
 {
-    public class SemestrPromoteRequest
+    public class PromoteStudentsRequest
     {
         [Required]
         public string Studies { get; set; }

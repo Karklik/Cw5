@@ -7,7 +7,7 @@ using System.Data.SqlClient;
 
 namespace Cw5.DAL
 {
-    public class RealDbService : IDbService
+    public class SqlServerStudentDbService : IStudentDbService
     {
         private readonly string connectionString = "Data Source=db-mssql;Initial Catalog=s16556;Integrated Security=True";
         private SqlConnection SqlConnection => new SqlConnection(connectionString);
@@ -30,7 +30,8 @@ namespace Cw5.DAL
             return command.ExecuteNonQuery();
         }
 
-        public Enrollment CreateStudentEnrollment(EnrollStudentRequest request)
+        public Enrollment CreateStudentEnrollment(
+            string indexNumber, string firstName, string lastName, DateTime birthDate, string studiesName)
         {
             using var connection = SqlConnection;
             connection.Open();
@@ -44,7 +45,7 @@ namespace Cw5.DAL
             {
                 // Checking if studies exists
                 command.CommandText = "SELECT * FROM Studies WHERE Name = @name";
-                command.Parameters.AddWithValue("name", request.Studies);
+                command.Parameters.AddWithValue("name", studiesName);
                 using var studiesDataReader = command.ExecuteReader();
                 if (!studiesDataReader.Read())
                 {
@@ -119,7 +120,7 @@ namespace Cw5.DAL
 
                 // Chceking if index number is unique
                 command.CommandText = "SELECT * FROM Student WHERE IndexNumber = @indexNumber";
-                command.Parameters.AddWithValue("indexNumber", request.IndexNumber);
+                command.Parameters.AddWithValue("indexNumber", indexNumber);
                 using var studentDataReader = command.ExecuteReader();
                 if (studentDataReader.Read())
                 {
@@ -132,10 +133,9 @@ namespace Cw5.DAL
                 // Create new student
                 command.CommandText = "INSERT INTO Student " +
                     "VALUES(@indexNumber, @firstName, @lastName, @birthDate, @idEnrollment)";
-                command.Parameters.AddWithValue("firstName", request.FirstName);
-                command.Parameters.AddWithValue("lastName", request.LastName);
-                command.Parameters.AddWithValue("birthDate", DateTime.ParseExact(request.BirthDate, "dd.MM.yyyy", null)
-                    .ToString("yyyy-MM-dd"));
+                command.Parameters.AddWithValue("firstName", firstName);
+                command.Parameters.AddWithValue("lastName", lastName);
+                command.Parameters.AddWithValue("birthDate", birthDate.ToString("yyyy-MM-dd"));
 
                 if (command.ExecuteNonQuery() == 0)
                 {

@@ -11,9 +11,9 @@ namespace Cw5.Controllers
     [ApiController]
     public class EnrollmentsController : ControllerBase
     {
-        private readonly IDbService _dbService;
+        private readonly IStudentDbService _dbService;
 
-        public EnrollmentsController(IDbService dbService)
+        public EnrollmentsController(IStudentDbService dbService)
         {
             _dbService = dbService;
         }
@@ -39,18 +39,20 @@ namespace Cw5.Controllers
         {
             try
             {
-                DateTime.ParseExact(request.BirthDate, "dd.MM.yyyy", null);
-
-                var enrollment = _dbService.CreateStudentEnrollment(request);
+                var enrollment = _dbService.CreateStudentEnrollment(
+                    request.IndexNumber, request.FirstName, request.LastName,
+                    DateTime.ParseExact(request.BirthDate, "dd.MM.yyyy", null), request.Studies);
                 if (enrollment != null)
                 {
-                    return CreatedAtAction(nameof(GetEnrollment), new { idEnrollment = enrollment.IdEnrollment }, new GetEntrollmentResponse
-                    {
-                        IdEnrollment = enrollment.IdEnrollment,
-                        IdStudy = enrollment.IdStudy,
-                        Semester = enrollment.Semester,
-                        StartDate = enrollment.StartDate
-                    });
+                    return CreatedAtAction(nameof(GetEnrollment),
+                        new { idEnrollment = enrollment.IdEnrollment },
+                        new GetEntrollmentResponse
+                        {
+                            IdEnrollment = enrollment.IdEnrollment,
+                            IdStudy = enrollment.IdStudy,
+                            Semester = enrollment.Semester,
+                            StartDate = enrollment.StartDate
+                        });
                 }
                 else
                     return StatusCode(500, "Failed to process request");
@@ -66,7 +68,7 @@ namespace Cw5.Controllers
         }
 
         [HttpPost("promotions")]
-        public IActionResult SemesterPromote(SemestrPromoteRequest request)
+        public IActionResult PromoteStudents(PromoteStudentsRequest request)
         {
             var studies = _dbService.GetStudies(request.Studies);
             if (studies == null)
